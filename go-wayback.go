@@ -167,7 +167,7 @@ func printHelp() {
 	fmt.Println("Notes:")
 	fmt.Println("- If none of the mode flags are specified, the default mode is -save-wayback-csv.")
 	fmt.Println("- In -wayback-only and -browsable modes, output is saved to $URL.txt unless -o is specified.")
-	fmt.Println("- In -save-wayback-csv mode, output is saved to $URL_sanitized_waybackArchive.csv unless -o is specified.")
+	fmt.Println("- In -save-wayback-csv mode, output is saved to $URL_waybackArchive.csv unless -o is specified.")
 }
 
 func sanitizeFilename(input string) string {
