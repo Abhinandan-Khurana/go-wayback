@@ -11,6 +11,12 @@
 - **User-Friendly Interface**: Simple and descriptive command-line flags for an optimized user experience.
 - **Help Menu**: Built-in help command to guide users through usage and options.
 
+## Direct installation
+
+```bash
+go install -v github.com/Abhinandan-Khurana/go-wayback@latest
+```
+
 ## Installation
 
 1. **Prerequisites**:
