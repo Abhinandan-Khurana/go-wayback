@@ -122,5 +122,6 @@ Specify a custom CSV output file:
 - **Date Range Filtering**: Allow users to specify a date range for the archives.
 - **Result Limiting**: Add an option to limit the number of results returned.
 - **Field Selection**: Enable users to choose specific fields to retrieve from the API.
+- add a feature to take domain input from a file.
 
 Feel free to contribute to these features or suggest new ones!
