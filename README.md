@@ -119,11 +119,8 @@ Specify a custom CSV output file:
 
 ## Potential Future Enhancements
 
-- De-deuplicate the URLs in the output.
 - **Date Range Filtering**: Allow users to specify a date range for the archives.
 - **Result Limiting**: Add an option to limit the number of results returned.
 - **Field Selection**: Enable users to choose specific fields to retrieve from the API.
-- **Verbose Mode**: Provide a `-v` flag for detailed execution logs.
-- **Parallel Processing**: Improve performance by fetching data concurrently.
 
 Feel free to contribute to these features or suggest new ones!
