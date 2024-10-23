@@ -47,15 +47,18 @@ go install -v github.com/Abhinandan-Khurana/go-wayback@latest
 **Options**:
 
 - `-wayback-only`: Get only wayback URLs.
+- `-subdomain`: Get unique subdomains from the Wayback URLs.
 - `-browsable`: Get wayback browsable links to see the archive.
+- `-unique-urls`: Remove duplicate URLs from the output.
 - `-save-wayback-csv`: Output the CSV with URL, LENGTH, TIMESTAMP.
+- `-v`: Enable verbose output
 - `-o [file]`: Specify the output file name.
 - `-h`, `--help`: Display help.
 
 **Notes**:
 
 - If none of the mode flags are specified, the default mode is `-save-wayback-csv`.
-- In `-wayback-only` and `-browsable` modes, output is saved to `$URL.txt` unless `-o` is specified.
+- In `-wayback-only`, `-browsable` and `-subdomain` modes, output is saved to `$URL.txt` unless `-o` is specified.
 - In `-save-wayback-csv` mode, output is saved to `$URL_waybackArchive.csv` unless `-o` is specified.
 - Only one mode flag (`-wayback-only`, `-browsable`, or `-save-wayback-csv`) can be used at a time.
 

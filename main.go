@@ -16,6 +16,9 @@ func main() {
 	waybackOnly := flag.Bool("wayback-only", false, "Get only wayback URLs")
 	browsable := flag.Bool("browsable", false, "Get wayback browsable links to see the archive")
 	saveCSV := flag.Bool("save-wayback-csv", false, "Output the CSV with URL,LENGTH,TIMESTAMP")
+	subdomain := flag.Bool("subdomain", false, "Get unique subdomains from the Wayback URLs")
+	uniqueUrls := flag.Bool("unique-urls", false, "Remove duplicate URLs from the output")
+	verbose := flag.Bool("v", false, "Enable verbose output")
 	outputFile := flag.String("o", "", "Specify the output file name")
 	help := flag.Bool("h", false, "Display help")
 
@@ -46,8 +49,11 @@ func main() {
 	if *saveCSV {
 		modeCount++
 	}
+	if *subdomain {
+		modeCount++
+	}
 	if modeCount > 1 {
-		fmt.Println("Error: Please specify only one mode at a time (-wayback-only, -browsable, or -save-wayback-csv)")
+		fmt.Println("Error: Please specify only one mode at a time (-wayback-only, -browsable, -save-wayback-csv, or -subdomain)")
 		os.Exit(1)
 	}
 	// Default to -save-wayback-csv if no mode is specified
@@ -60,16 +66,35 @@ func main() {
 
 	// Set default output file names if not specified
 	if *outputFile == "" {
-		if *waybackOnly || *browsable {
+		if *waybackOnly || *browsable || *subdomain {
 			*outputFile = sanitizedURL + ".txt"
 		} else if *saveCSV {
 			*outputFile = sanitizedURL + "_waybackArchive.csv"
 		}
 	}
 
+	if *verbose {
+		fmt.Printf("Input URL: %s\n", inputURL)
+		fmt.Printf("Mode: ")
+		if *waybackOnly {
+			fmt.Println("Wayback Only")
+		} else if *browsable {
+			fmt.Println("Browsable")
+		} else if *saveCSV {
+			fmt.Println("Save CSV")
+		} else if *subdomain {
+			fmt.Println("Subdomain")
+		}
+		fmt.Printf("Output File: %s\n", *outputFile)
+	}
+
 	// Construct the API URL
 	escapedURL := url.QueryEscape("*." + inputURL + "/*")
 	apiURL := fmt.Sprintf("https://web.archive.org/cdx/search/cdx?url=%s&fl=original,length,timestamp", escapedURL)
+
+	if *verbose {
+		fmt.Printf("Fetching data from API URL: %s\n", apiURL)
+	}
 
 	// Fetch data from the API
 	resp, err := http.Get(apiURL)
@@ -94,6 +119,11 @@ func main() {
 	lines := strings.Split(bodyString, "\n")
 
 	var output []string
+	var subdomainSet map[string]bool
+
+	if *subdomain {
+		subdomainSet = make(map[string]bool)
+	}
 
 	// Process each line
 	for _, line := range lines {
@@ -109,7 +139,21 @@ func main() {
 		length := fields[1]
 		timestamp := fields[2]
 
-		if *waybackOnly {
+		if *subdomain {
+			// Extract subdomain from originalURL
+			parsedURL, err := url.Parse(originalURL)
+			if err != nil {
+				if *verbose {
+					fmt.Printf("Error parsing URL %s: %v\n", originalURL, err)
+				}
+				continue
+			}
+			host := parsedURL.Host
+			if host == "" {
+				continue
+			}
+			subdomainSet[host] = true
+		} else if *waybackOnly {
 			// Get only wayback URLs
 			output = append(output, originalURL)
 		} else if *browsable {
@@ -120,6 +164,25 @@ func main() {
 			// Output the CSV with URL,LENGTH,TIMESTAMP
 			output = append(output, fmt.Sprintf("%s,%s,%s", originalURL, length, timestamp))
 		}
+	}
+
+	// Collect subdomains if in subdomain mode
+	if *subdomain {
+		for sub := range subdomainSet {
+			output = append(output, sub)
+		}
+	}
+
+	// Remove duplicates if unique-urls flag is set
+	if *uniqueUrls {
+		output = uniqueStrings(output)
+		if *verbose {
+			fmt.Printf("After removing duplicates, total items: %d\n", len(output))
+		}
+	}
+
+	if *verbose {
+		fmt.Printf("Total items collected: %d\n", len(output))
 	}
 
 	// Output handling
@@ -161,12 +224,15 @@ func printHelp() {
 	fmt.Println("  -wayback-only        Get only wayback URLs")
 	fmt.Println("  -browsable           Get wayback browsable links to see the archive")
 	fmt.Println("  -save-wayback-csv    Output the CSV with URL,LENGTH,TIMESTAMP")
+	fmt.Println("  -subdomain           Get unique subdomains from the Wayback URLs")
+	fmt.Println("  -unique-urls         Remove duplicate URLs from the output")
+	fmt.Println("  -v                   Enable verbose output")
 	fmt.Println("  -o [file]            Specify the output file name")
 	fmt.Println("  -h, --help           Display help")
 	fmt.Println("")
 	fmt.Println("Notes:")
 	fmt.Println("- If none of the mode flags are specified, the default mode is -save-wayback-csv.")
-	fmt.Println("- In -wayback-only and -browsable modes, output is saved to $URL.txt unless -o is specified.")
+	fmt.Println("- In -wayback-only, -browsable, and -subdomain modes, output is saved to $URL.txt unless -o is specified.")
 	fmt.Println("- In -save-wayback-csv mode, output is saved to $URL_waybackArchive.csv unless -o is specified.")
 }
 
@@ -186,4 +252,16 @@ func sanitizeFilename(input string) string {
 		}
 	}
 	return sanitized
+}
+
+func uniqueStrings(input []string) []string {
+	set := make(map[string]bool)
+	var output []string
+	for _, item := range input {
+		if !set[item] {
+			set[item] = true
+			output = append(output, item)
+		}
+	}
+	return output
 }
