@@ -4,264 +4,226 @@ import (
 	"encoding/csv"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
+	"sync"
+	"time"
 )
 
-func main() {
-	// Define flags
-	waybackOnly := flag.Bool("wayback-only", false, "Get only wayback URLs")
-	browsable := flag.Bool("browsable", false, "Get wayback browsable links to see the archive")
-	saveCSV := flag.Bool("save-wayback-csv", false, "Output the CSV with URL,LENGTH,TIMESTAMP")
-	subdomain := flag.Bool("subdomain", false, "Get unique subdomains from the Wayback URLs")
-	uniqueUrls := flag.Bool("unique-urls", false, "Remove duplicate URLs from the output")
-	verbose := flag.Bool("v", false, "Enable verbose output")
-	outputFile := flag.String("o", "", "Specify the output file name")
-	help := flag.Bool("h", false, "Display help")
+type WaybackResult struct {
+	URL       string
+	Length    string
+	Timestamp string
+	Error     error
+}
 
-	// Parse flags
-	flag.Parse()
+type Config struct {
+	WaybackOnly bool
+	Browsable   bool
+	SaveCSV     bool
+	Subdomain   bool
+	UniqueURLs  bool
+	Verbose     bool
+	OutputFile  string
+	Concurrent  int
+	Timeout     int
+}
 
-	// Display help if requested or if no URL is provided
-	if *help || len(flag.Args()) == 0 {
-		printHelp()
-		os.Exit(0)
+func fetchWaybackData(apiURL string, timeout int) ([]byte, error) {
+	client := &http.Client{
+		Timeout: time.Duration(timeout) * time.Second,
 	}
 
-	// Get the URL argument
+	resp, err := client.Get(apiURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch data: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP error: %d", resp.StatusCode)
+	}
+
+	return io.ReadAll(resp.Body)
+}
+
+func processURLs(lines []string, config Config, results chan<- WaybackResult) {
+	var wg sync.WaitGroup
+	semaphore := make(chan struct{}, config.Concurrent)
+
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+
+		wg.Add(1)
+		go func(line string) {
+			defer wg.Done()
+			semaphore <- struct{}{}        // Acquire
+			defer func() { <-semaphore }() // Release
+
+			fields := strings.Fields(line)
+			if len(fields) < 3 {
+				return
+			}
+
+			result := WaybackResult{
+				URL:       fields[0],
+				Length:    fields[1],
+				Timestamp: fields[2],
+			}
+
+			if config.Subdomain {
+				parsedURL, err := url.Parse(result.URL)
+				if err != nil {
+					result.Error = err
+				} else {
+					result.URL = parsedURL.Host
+				}
+			} else if config.Browsable {
+				result.URL = fmt.Sprintf("https://web.archive.org/web/%s/%s", result.Timestamp, result.URL)
+			}
+
+			results <- result
+		}(line)
+	}
+
+	wg.Wait()
+	close(results)
+}
+
+func writeOutput(writer io.Writer, results []WaybackResult, config Config) error {
+	if config.SaveCSV {
+		csvWriter := csv.NewWriter(writer)
+		defer csvWriter.Flush()
+
+		// Write header
+		if err := csvWriter.Write([]string{"URL", "LENGTH", "TIMESTAMP"}); err != nil {
+			return fmt.Errorf("error writing CSV header: %v", err)
+		}
+
+		for _, result := range results {
+			if err := csvWriter.Write([]string{result.URL, result.Length, result.Timestamp}); err != nil {
+				return fmt.Errorf("error writing CSV record: %v", err)
+			}
+		}
+	} else {
+		for _, result := range results {
+			fmt.Fprintln(writer, result.URL)
+		}
+	}
+	return nil
+}
+
+func main() {
+	config := Config{}
+
+	// Define flags
+	flag.BoolVar(&config.WaybackOnly, "wayback-only", false, "Get only wayback URLs")
+	flag.BoolVar(&config.Browsable, "browsable", false, "Get wayback browsable links")
+	flag.BoolVar(&config.SaveCSV, "save-wayback-csv", false, "Output as CSV")
+	flag.BoolVar(&config.Subdomain, "subdomain", false, "Get unique subdomains")
+	flag.BoolVar(&config.UniqueURLs, "unique-urls", true, "Remove duplicate URLs")
+	flag.BoolVar(&config.Verbose, "v", false, "Verbose output")
+	flag.StringVar(&config.OutputFile, "o", "", "Output file (optional)")
+	flag.IntVar(&config.Concurrent, "concurrent", 10, "Number of concurrent processors")
+	flag.IntVar(&config.Timeout, "timeout", 30, "Request timeout in seconds")
+
+	help := flag.Bool("h", false, "Display help")
+	flag.Parse()
+
+	if *help || len(flag.Args()) == 0 {
+		printHelp()
+		return
+	}
+
 	inputURL := flag.Arg(0)
 	if inputURL == "" {
 		fmt.Println("Error: URL is required")
 		os.Exit(1)
 	}
 
-	// Determine the mode
-	modeCount := 0
-	if *waybackOnly {
-		modeCount++
-	}
-	if *browsable {
-		modeCount++
-	}
-	if *saveCSV {
-		modeCount++
-	}
-	if *subdomain {
-		modeCount++
-	}
-	if modeCount > 1 {
-		fmt.Println("Error: Please specify only one mode at a time (-wayback-only, -browsable, -save-wayback-csv, or -subdomain)")
-		os.Exit(1)
-	}
-	// Default to -save-wayback-csv if no mode is specified
-	if modeCount == 0 {
-		*saveCSV = true
-	}
-
-	// Sanitize the URL for use in filename
-	sanitizedURL := sanitizeFilename(inputURL)
-
-	// Set default output file names if not specified
-	if *outputFile == "" {
-		if *waybackOnly || *browsable || *subdomain {
-			*outputFile = sanitizedURL + ".txt"
-		} else if *saveCSV {
-			*outputFile = sanitizedURL + "_waybackArchive.csv"
-		}
-	}
-
-	if *verbose {
-		fmt.Printf("Input URL: %s\n", inputURL)
-		fmt.Printf("Mode: ")
-		if *waybackOnly {
-			fmt.Println("Wayback Only")
-		} else if *browsable {
-			fmt.Println("Browsable")
-		} else if *saveCSV {
-			fmt.Println("Save CSV")
-		} else if *subdomain {
-			fmt.Println("Subdomain")
-		}
-		fmt.Printf("Output File: %s\n", *outputFile)
-	}
-
-	// Construct the API URL
+	// Construct API URL
 	escapedURL := url.QueryEscape("*." + inputURL + "/*")
 	apiURL := fmt.Sprintf("https://web.archive.org/cdx/search/cdx?url=%s&fl=original,length,timestamp", escapedURL)
 
-	if *verbose {
-		fmt.Printf("Fetching data from API URL: %s\n", apiURL)
+	if config.Verbose {
+		fmt.Fprintf(os.Stderr, "Fetching data from: %s\n", apiURL)
 	}
 
-	// Fetch data from the API
-	resp, err := http.Get(apiURL)
+	// Fetch and process data
+	bodyBytes, err := fetchWaybackData(apiURL, config.Timeout)
 	if err != nil {
-		fmt.Printf("Error fetching data from Wayback Machine API: %v\n", err)
-		os.Exit(1)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		fmt.Printf("Error fetching data: HTTP %d\n", resp.StatusCode)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		fmt.Printf("Error reading response body: %v\n", err)
-		os.Exit(1)
-	}
+	lines := strings.Split(string(bodyBytes), "\n")
+	results := make(chan WaybackResult, len(lines))
 
-	bodyString := string(bodyBytes)
-	lines := strings.Split(bodyString, "\n")
+	go processURLs(lines, config, results)
 
-	var output []string
-	var subdomainSet map[string]bool
+	// Collect results
+	var processedResults []WaybackResult
+	uniqueURLs := make(map[string]bool)
 
-	if *subdomain {
-		subdomainSet = make(map[string]bool)
-	}
-
-	// Process each line
-	for _, line := range lines {
-		if strings.TrimSpace(line) == "" {
+	for result := range results {
+		if result.Error != nil && config.Verbose {
+			fmt.Fprintf(os.Stderr, "Error processing URL: %v\n", result.Error)
 			continue
 		}
-		// Each line has format: URL LENGTH TIMESTAMP
-		fields := strings.Fields(line)
-		if len(fields) < 3 {
-			continue
-		}
-		originalURL := fields[0]
-		length := fields[1]
-		timestamp := fields[2]
 
-		if *subdomain {
-			// Extract subdomain from originalURL
-			parsedURL, err := url.Parse(originalURL)
-			if err != nil {
-				if *verbose {
-					fmt.Printf("Error parsing URL %s: %v\n", originalURL, err)
-				}
-				continue
+		if config.UniqueURLs {
+			if !uniqueURLs[result.URL] {
+				uniqueURLs[result.URL] = true
+				processedResults = append(processedResults, result)
 			}
-			host := parsedURL.Host
-			if host == "" {
-				continue
-			}
-			subdomainSet[host] = true
-		} else if *waybackOnly {
-			// Get only wayback URLs
-			output = append(output, originalURL)
-		} else if *browsable {
-			// Get URL wayback browsable links to see the archive
-			waybackURL := fmt.Sprintf("https://web.archive.org/web/%s/%s", timestamp, originalURL)
-			output = append(output, waybackURL)
-		} else if *saveCSV {
-			// Output the CSV with URL,LENGTH,TIMESTAMP
-			output = append(output, fmt.Sprintf("%s,%s,%s", originalURL, length, timestamp))
+		} else {
+			processedResults = append(processedResults, result)
 		}
 	}
 
-	// Collect subdomains if in subdomain mode
-	if *subdomain {
-		for sub := range subdomainSet {
-			output = append(output, sub)
-		}
-	}
+	// Handle output
+	var writer io.Writer = os.Stdout
+	var file *os.File
 
-	// Remove duplicates if unique-urls flag is set
-	if *uniqueUrls {
-		output = uniqueStrings(output)
-		if *verbose {
-			fmt.Printf("After removing duplicates, total items: %d\n", len(output))
-		}
-	}
-
-	if *verbose {
-		fmt.Printf("Total items collected: %d\n", len(output))
-	}
-
-	// Output handling
-	if *saveCSV {
-		// Write CSV file
-		file, err := os.Create(*outputFile)
+	if config.OutputFile != "" {
+		file, err = os.Create(config.OutputFile)
 		if err != nil {
-			fmt.Printf("Error creating file: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Error creating output file: %v\n", err)
 			os.Exit(1)
 		}
 		defer file.Close()
+		writer = file
+	}
 
-		writer := csv.NewWriter(file)
-		defer writer.Flush()
+	if err := writeOutput(writer, processedResults, config); err != nil {
+		fmt.Fprintf(os.Stderr, "Error writing output: %v\n", err)
+		os.Exit(1)
+	}
 
-		// Write header
-		writer.Write([]string{"URL", "LENGTH", "TIMESTAMP"})
-
-		for _, line := range output {
-			record := strings.Split(line, ",")
-			writer.Write(record)
+	if config.Verbose {
+		fmt.Fprintf(os.Stderr, "Total items processed: %d\n", len(processedResults))
+		if config.OutputFile != "" {
+			fmt.Fprintf(os.Stderr, "Output saved to: %s\n", config.OutputFile)
 		}
-		fmt.Printf("Output saved to %s\n", *outputFile)
-	} else {
-		// Output to file
-		outputData := strings.Join(output, "\n")
-		err := ioutil.WriteFile(*outputFile, []byte(outputData), 0644)
-		if err != nil {
-			fmt.Printf("Error writing to file: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Printf("Output saved to %s\n", *outputFile)
 	}
 }
 
 func printHelp() {
-	fmt.Println("Usage: go-wayback [options] <URL>")
-	fmt.Println("Options:")
-	fmt.Println("  -wayback-only        Get only wayback URLs")
-	fmt.Println("  -browsable           Get wayback browsable links to see the archive")
-	fmt.Println("  -save-wayback-csv    Output the CSV with URL,LENGTH,TIMESTAMP")
-	fmt.Println("  -subdomain           Get unique subdomains from the Wayback URLs")
-	fmt.Println("  -unique-urls         Remove duplicate URLs from the output")
-	fmt.Println("  -v                   Enable verbose output")
-	fmt.Println("  -o [file]            Specify the output file name")
-	fmt.Println("  -h, --help           Display help")
-	fmt.Println("")
-	fmt.Println("Notes:")
-	fmt.Println("- If none of the mode flags are specified, the default mode is -save-wayback-csv.")
-	fmt.Println("- In -wayback-only, -browsable, and -subdomain modes, output is saved to $URL.txt unless -o is specified.")
-	fmt.Println("- In -save-wayback-csv mode, output is saved to $URL_waybackArchive.csv unless -o is specified.")
-}
-
-func sanitizeFilename(input string) string {
-	// Remove protocol prefixes
-	input = strings.ReplaceAll(input, "http://", "")
-	input = strings.ReplaceAll(input, "https://", "")
-	// Replace non-alphanumeric characters with underscores
-	sanitized := ""
-	for _, r := range input {
-		if (r >= 'a' && r <= 'z') ||
-			(r >= 'A' && r <= 'Z') ||
-			(r >= '0' && r <= '9') {
-			sanitized += string(r)
-		} else {
-			sanitized += "_"
-		}
-	}
-	return sanitized
-}
-
-func uniqueStrings(input []string) []string {
-	set := make(map[string]bool)
-	var output []string
-	for _, item := range input {
-		if !set[item] {
-			set[item] = true
-			output = append(output, item)
-		}
-	}
-	return output
+	fmt.Println("Usage: wayback [options] <URL>")
+	fmt.Println("\nOptions:")
+	fmt.Println("  -wayback-only       Get only wayback URLs")
+	fmt.Println("  -browsable          Get wayback browsable links")
+	fmt.Println("  -save-wayback-csv   Output as CSV")
+	fmt.Println("  -subdomain          Get unique subdomains")
+	//	fmt.Println("  -unique-urls        Remove duplicate URLs")
+	fmt.Println("  -v                  Enable verbose output")
+	fmt.Println("  -o [file]           Output file (optional)")
+	fmt.Println("  -concurrent [n]      Number of concurrent processors (default: 10)")
+	fmt.Println("  -timeout [seconds]   Request timeout in seconds (default: 30)")
+	fmt.Println("  -h                  Display this help")
 }

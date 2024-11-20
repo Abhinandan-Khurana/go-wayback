@@ -1,127 +1,160 @@
 # go-wayback
 
-`go-wayback` is a command-line tool written in Go that interacts with the Wayback Machine API to retrieve archived URLs and related data for a given website. It offers multiple modes to fetch different types of information and outputs the results to files or CSV, enhancing your ability to explore historical snapshots of web content.
+`go-wayback` is a high-performance command-line tool written in Go that interacts with the Wayback Machine API to retrieve archived URLs and related data for a given website. It features concurrent processing, flexible output options, and robust error handling to efficiently explore historical snapshots of web content.
 
 ## Features
 
-- **Wayback URLs Retrieval**: Fetch only the original URLs archived by the Wayback Machine.
-- **Browsable Archive Links**: Generate browsable links to view archived versions of URLs directly in your browser.
-- **CSV Output**: Save detailed information including URL, content length, and timestamp in a CSV file.
-- **Flexible Output Options**: Specify output filenames or use default naming conventions based on the sanitized URL.
-- **User-Friendly Interface**: Simple and descriptive command-line flags for an optimized user experience.
-- **Help Menu**: Built-in help command to guide users through usage and options.
+- **Concurrent Processing**: Fast retrieval through parallel processing of URLs
+- **Multiple Output Modes**:
+  - Wayback URLs Retrieval
+  - Browsable Archive Links
+  - Unique Subdomains Extraction
+  - CSV Output with detailed metadata
+- **Flexible Output Handling**:
+  - Standard output (stdout) by default
+  - Optional file output with custom naming
+  - CSV format support
+- **Advanced Options**:
+  - Configurable concurrent connections
+  - Request timeout control
+  - Verbose logging
+  - URL deduplication
+- **Resource Efficient**:
+  - Streaming processing
+  - Controlled memory usage
+  - Proper resource cleanup
 
-## Direct installation
+## Direct Installation
 
-```bash
 go install -v github.com/Abhinandan-Khurana/go-wayback@latest
-```
 
-## Installation
+## Manual Installation
 
 1. **Prerequisites**:
 
    - [Go](https://golang.org/doc/install) (version 1.16 or higher)
 
 2. **Clone the Repository**:
-
-   ```bash
-   git clone https://github.com/Abhinandan-Khurana/go-wayback.git
+   git clone <https://github.com/Abhinandan-Khurana/go-wayback.git>
    cd go-wayback
+
+   ```
+
    ```
 
 3. **Build the Executable**:
 
-   ```bash
+   ```
    go build -o go-wayback main.go
    ```
 
-   This will generate a `go-wayback` executable in your current directory.
-
 ## Usage
 
-```bash
-./go-wayback [options] <URL>
-```
+./go-wayback [options]
 
-**Options**:
+### Options
 
-- `-wayback-only`: Get only wayback URLs.
-- `-subdomain`: Get unique subdomains from the Wayback URLs.
-- `-browsable`: Get wayback browsable links to see the archive.
-- `-unique-urls`: Remove duplicate URLs from the output.
-- `-save-wayback-csv`: Output the CSV with URL, LENGTH, TIMESTAMP.
+- `-wayback-only`: Get only wayback URLs
+- `-browsable`: Get wayback browsable links
+- `-save-wayback-csv`: Output as CSV with URL, LENGTH, TIMESTAMP
+- `-subdomain`: Extract and display unique subdomains
 - `-v`: Enable verbose output
-- `-o [file]`: Specify the output file name.
-- `-h`, `--help`: Display help.
+- `-o [file]`: Specify output file (optional, defaults to stdout)
+- `-concurrent [n]`: Number of concurrent processors (default: 10)
+- `-timeout [seconds]`: Request timeout in seconds (default: 30)
+- `-h`: Display help information
 
-**Notes**:
+### Output Behavior
 
-- If none of the mode flags are specified, the default mode is `-save-wayback-csv`.
-- In `-wayback-only`, `-browsable` and `-subdomain` modes, output is saved to `$URL.txt` unless `-o` is specified.
-- In `-save-wayback-csv` mode, output is saved to `$URL_waybackArchive.csv` unless `-o` is specified.
-- Only one mode flag (`-wayback-only`, `-browsable`, or `-save-wayback-csv`) can be used at a time.
+- Default output is to stdout unless `-o` flag is specified
+- CSV output includes headers: URL, LENGTH, TIMESTAMP
+- Subdomain mode automatically deduplicates results
+- Verbose mode provides additional processing information
 
 ## Examples
 
-### Get Only Wayback URLs
+### Basic URL Retrieval
 
-Retrieve all archived URLs for `example.com` and save them to the default output file (`example_com.txt`):
+# Output to stdout
 
-```bash
+```
 ./go-wayback -wayback-only example.com
 ```
 
-Specify a custom output file:
+# Save to file
 
-```bash
-./go-wayback -wayback-only -o wayback_urls.txt example.com
+```
+./go-wayback -o results.txt example.com
 ```
 
-### Get Browsable Archive Links
+### Unique Subdomains
 
-Generate browsable links to view archived versions of `example.com`:
+# Get unique subdomains
 
-```bash
-./go-wayback -browsable example.com
+```
+./go-wayback -subdomain example.com
 ```
 
-Save to a custom file:
+# Save subdomains to file
 
-```bash
-./go-wayback -browsable -o browsable_links.txt example.com
+```
+./go-wayback -subdomain -o subdomains.txt example.com
 ```
 
-### Output CSV with URL, LENGTH, TIMESTAMP
+### CSV Output with Metadata
 
-Fetch detailed archive data and save it as a CSV file (default mode):
+# Default CSV format
 
-```bash
-./go-wayback example.com
+```
+./go-wayback -save-wayback-csv example.com
 ```
 
-Specify a custom CSV output file:
+# Custom CSV file
 
-```bash
+```
 ./go-wayback -save-wayback-csv -o archive_data.csv example.com
 ```
 
-### Display Help Menu
+### Browsable Archive Links
 
-```bash
-./go-wayback -h
+# Get browsable Wayback Machine links
+
 ```
+./go-wayback -browsable example.com
+```
+
+### Advanced Usage
+
+```
+# Concurrent processing with timeout
+
+./go-wayback -concurrent 20 -timeout 45 example.com
+```
+
+## Future Enhancements
+
+- [ ] Date range filtering for archives
+- [ ] Batch processing from input file
+- [ ] Custom field selection
+- [ ] Regular expression filtering
+- [ ] Export formats (JSON, XML)
+- [ ] Rate limiting controls
+- [ ] Advanced filtering options
+- [ ] Integration with other archive services
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
 
 ## Acknowledgments
 
-- [The Wayback Machine](https://web.archive.org) for providing access to archived web content.
-- [Go](https://golang.org) language and its community for making powerful tools accessible.
+- [The Wayback Machine](https://web.archive.org) for providing access to archived web content
+- [Go](https://golang.org) community for the excellent tooling and libraries
 
-## Potential Future Enhancements
+## License
 
-- **Date Range Filtering**: Allow users to specify a date range for the archives.
-- **Result Limiting**: Add an option to limit the number of results returned.
-- **Field Selection**: Enable users to choose specific fields to retrieve from the API.
-- add a feature to take domain input from a file.
+This project is licensed under the MIT License - see the LICENSE file for details.
 
-Feel free to contribute to these features or suggest new ones!
+## Author
+
+[Abhinandan-Khurana](https://github.com/Abhinandan-Khurana)
