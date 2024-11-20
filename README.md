@@ -171,14 +171,15 @@ go install -v github.com/Abhinandan-Khurana/go-wayback@latest
 
 ### XML
 
-```
-    http://example.com
-    12345
-    20230101120000
-    2023-01-01T12:00:00Z
-
-
-```
+````
+<results>
+  <result>
+    <url>http://example.com</url>
+    <length>12345</length>
+    <timestamp>20230101120000</timestamp>
+    <date>2023-01-01T12:00:00Z</date>
+  </result>
+</results>```
 
 ## Performance Considerations
 
@@ -203,3 +204,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## Author
 
 [Abhinandan-Khurana](https://github.com/Abhinandan-Khurana)
+````
