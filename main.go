@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	VERSION = "v2.0.0"
+	VERSION = "v2.0.1"
 	AUTHOR  = "Abhinandan-Khurana"
 )
 
@@ -47,6 +47,12 @@ type Config struct {
 	RegexFilter  string
 	RateLimit    int
 	MaxResults   int
+}
+
+type XMLResponse struct {
+	XMLName xml.Name        `xml:"wayback"`
+	Results []WaybackResult `xml:"results>result"`
+	Count   int             `xml:"count"`
 }
 
 type VersionInfo struct {
@@ -258,13 +264,13 @@ func processXMLFormat(bodyBytes []byte, config Config, writer io.Writer) error {
 		}
 	}
 
-	xmlData := struct {
-		Results []WaybackResult `xml:"result"`
-		Count   int             `xml:"count"`
-	}{
+	xmlData := XMLResponse{
 		Results: results,
 		Count:   len(results),
 	}
+
+	// Write XML header
+	fmt.Fprintf(writer, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
 
 	encoder := xml.NewEncoder(writer)
 	encoder.Indent("", "  ")
