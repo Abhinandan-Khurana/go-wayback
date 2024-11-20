@@ -26,7 +26,9 @@
 
 ## Direct Installation
 
+```
 go install -v github.com/Abhinandan-Khurana/go-wayback@latest
+```
 
 ## Manual Installation
 
@@ -35,12 +37,11 @@ go install -v github.com/Abhinandan-Khurana/go-wayback@latest
    - [Go](https://golang.org/doc/install) (version 1.16 or higher)
 
 2. **Clone the Repository**:
-   git clone <https://github.com/Abhinandan-Khurana/go-wayback.git>
-   cd go-wayback
 
-   ```
-
-   ```
+```
+git clone <https://github.com/Abhinandan-Khurana/go-wayback.git>
+cd go-wayback
+```
 
 3. **Build the Executable**:
 
@@ -50,7 +51,9 @@ go install -v github.com/Abhinandan-Khurana/go-wayback@latest
 
 ## Usage
 
+```
 ./go-wayback [options]
+```
 
 ### Options
 
