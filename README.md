@@ -171,7 +171,7 @@ go install -v github.com/Abhinandan-Khurana/go-wayback@latest
 
 ### XML
 
-````
+```
 <results>
   <result>
     <url>http://example.com</url>
@@ -179,7 +179,8 @@ go install -v github.com/Abhinandan-Khurana/go-wayback@latest
     <timestamp>20230101120000</timestamp>
     <date>2023-01-01T12:00:00Z</date>
   </result>
-</results>```
+</results>
+```
 
 ## Performance Considerations
 
@@ -204,4 +205,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## Author
 
 [Abhinandan-Khurana](https://github.com/Abhinandan-Khurana)
-````
+
+```
+
+```
