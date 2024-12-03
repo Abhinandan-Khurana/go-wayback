@@ -29,7 +29,7 @@
 ### Direct Installation
 
 ```
-go install -v github.com/Abhinandan-Khurana/go-wayback@latest
+go install -v github.com/Abhinandan-Khurana/go-wayback/v2@v2.0.2
 ```
 
 ### Manual Installation
